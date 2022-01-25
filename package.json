@@ -1,0 +1,17 @@
+{
+  "name": "provider-quest-funding-sources",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Jim Pick (@jimpick)",
+  "license": "MIT/Apache-2 (Permissive License Stack)",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.48.0",
+    "date-fns": "^2.28.0",
+    "get-stream": "^6.0.1"
+  }
+}

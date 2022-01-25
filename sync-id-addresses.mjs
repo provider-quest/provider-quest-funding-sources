@@ -3,7 +3,7 @@ import getStream from 'get-stream'
 import { S3Client, ListObjectsCommand, GetObjectCommand } from '@aws-sdk/client-s3'
 
 try {
-  const baseDir = './sync/power-actor-claims'
+  const baseDir = './sync/id-addresses'
   await fs.mkdirSync(baseDir, { recursive: true })
   const s3Client = new S3Client({
     region: 'us-east-2'
@@ -25,7 +25,7 @@ try {
     if (to > 50000) break
     const target = `${baseDir}/${String(from).padStart(10, '0')}__${String(to).padStart(10, '0')}.csv`
     if (!fs.existsSync(target)) {
-      const key = `data/${from}__${to}/power_actor_claims.csv`
+      const key = `data/${from}__${to}/id_addresses.csv`
       console.log(range, key)
       const data = await s3Client.send(new GetObjectCommand({
         Bucket: bucketParams.Bucket,

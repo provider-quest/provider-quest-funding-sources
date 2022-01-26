@@ -3,7 +3,7 @@ import { parse } from 'csv-parse'
 
 const addressToId = new Map()
 const idToAddress = new Map()
-const addressFirstFunder = new Map()
+const addressFunded = new Map()
 
 async function parseIdAddresses () {
   const parser = parse()
@@ -90,8 +90,8 @@ async function parseParsedMessages () {
     parser.on('end', () => {
       for (const epoch in epochs) {
         for (const { from, to } of epochs[epoch]) {
-          if (!addressFirstFunder.get(to)) {
-            addressFirstFunder.set(to, from)
+          if (!addressFunded.get(to)) {
+            addressFunded.set(to, { from, epoch })
             console.log(`First fund ${from} => ${to} at ${epoch}`)
           }
         }
@@ -148,6 +148,13 @@ async function parseMinerInfos () {
         for (const { minerId, ownerId } of epochs[epoch]) {
           console.log(`Miner ${minerId} at ${epoch}`)
           console.log(` Owner: ${ownerId} ${idToAddress.get(ownerId)}`)
+          let address = idToAddress.get(ownerId)
+          let funded
+          while(funded = addressFunded.get(address)) {
+            const { from, epoch } = funded
+            console.log(`   Funded at ${epoch}: ${addressToId.get(from)} ${from}`)
+            address = from
+          }
         }
       }
       resolve()

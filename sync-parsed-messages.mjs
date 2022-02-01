@@ -22,7 +22,7 @@ try {
   // aws s3 ls "s3://lily-data/data/1051440__1054319/power_actor_claims.csv"
   for (const range of ranges) {
     const { from, to } = range
-    if (to > 100000) break
+    if (to > 200000) break
     const target = `${baseDir}/${String(from).padStart(10, '0')}__${String(to).padStart(10, '0')}.csv`
     if (!fs.existsSync(target)) {
       const key = `data/${from}__${to}/parsed_messages.csv`

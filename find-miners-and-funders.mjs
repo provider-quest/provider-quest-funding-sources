@@ -1,9 +1,11 @@
 import fs from 'fs'
 import { parse } from 'csv-parse'
 import { epochToDate } from './filecoin-epochs.mjs'
+import Database from 'better-sqlite3'
 
 const addressToId = new Map()
 const idToAddress = new Map()
+const addressRegisteredEpoch = new Map()
 const addressFunded = new Map()
 const seenMiners = new Set()
 
@@ -46,6 +48,7 @@ async function parseIdAddresses (range) {
         for (const { id, address } of epochs[epoch]) {
           // console.log(`Address ${id} ${address} at ${epoch}`)
           addressToId.set(address, id)
+          addressRegisteredEpoch.set(address, epoch)
           idToAddress.set(id, address)
         }
       }
@@ -174,7 +177,55 @@ async function parseMinerInfos (range) {
   await promise
 }
 
+function writeCheckpoint (range) {
+  console.log('Write checkpoint', range)
+  try {
+    const db = new Database(`checkpoints/${range}.db`)
+
+    // const addressToId = new Map()
+    // const idToAddress = new Map()
+    // const addressFunded = new Map()
+    // const seenMiners = new Set()
+
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS addresses(` +
+      `address VARCHAR, ` +
+      `id VARCHAR, ` +
+      `registered_epoch INT, ` +
+      `funded_epoch INT, ` +
+      `funded_from VARCHAR);`)
+
+    const insert = db.prepare(
+      'INSERT INTO addresses ' +
+      '(address, id, registered_epoch, funded_epoch, funded_from) ' +
+      'VALUES (@address, @id, @registeredEpoch, @fundedEpoch, @fundedFrom)');
+
+    // db.transaction(() => {
+      for (const [ address, id ] of addressToId) {
+        let fundedEpoch
+        let fundedFrom
+        const registeredEpoch = addressRegisteredEpoch.get(address)
+        const fundedRecord = addressFunded.get(address)
+        if (fundedRecord) {
+          fundedFrom = fundedRecord.from
+          fundedEpoch = fundedRecord.epoch
+        }
+        console.log('Address', address, 'Id', id,
+                    'registered_epoch', registeredEpoch,
+                    'funded_epoch', fundedEpoch,
+                    'funded_from', fundedFrom)
+        insert.run({ address, id, registeredEpoch, fundedEpoch, fundedFrom })
+      }
+    // })
+
+    db.close()
+  } catch (e) {
+    console.error('writeCheckpoint Exception', e)
+  }
+}
+
 async function run () {
+  fs.mkdirSync('checkpoints', { recursive: true })
   const files = fs.readdirSync('sync/parsed-messages')
   for (const file of files) {
     const match = file.match(/(\d+)__(\d+)\.csv/)
@@ -184,6 +235,7 @@ async function run () {
       await parseIdAddresses(range)
       await parseParsedMessages(range)
       await parseMinerInfos(range)
+      await writeCheckpoint(range)
     }
   }
 }

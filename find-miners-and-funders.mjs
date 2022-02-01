@@ -48,7 +48,7 @@ async function parseIdAddresses (range) {
         for (const { id, address } of epochs[epoch]) {
           // console.log(`Address ${id} ${address} at ${epoch}`)
           addressToId.set(address, id)
-          addressRegisteredEpoch.set(address, epoch)
+          addressRegisteredEpoch.set(address, Number(epoch))
           idToAddress.set(id, address)
         }
       }
@@ -100,7 +100,7 @@ async function parseParsedMessages (range) {
       for (const epoch in epochs) {
         for (const { from, to } of epochs[epoch]) {
           if (!addressFunded.has(to)) {
-            addressFunded.set(to, { from, epoch })
+            addressFunded.set(to, { from, epoch: Number(epoch) })
             // console.log(`First fund ${from} => ${to} at ${epoch}`)
           }
         }
@@ -161,10 +161,18 @@ async function parseMinerInfos (range) {
             console.log(` Owner: ${ownerId} ${idToAddress.get(ownerId)}`)
             let address = idToAddress.get(ownerId)
             let funded
+            let lastEpoch = Number(epoch)
             while(funded = addressFunded.get(address)) {
               const { from, epoch } = funded
+              if (epoch > lastEpoch) {
+                console.error(`      Error: Funded at future ${epoch} > ${lastEpoch}: ${addressToId.get(from)} ${from}`)
+                console.error(`      Error: ${typeof epoch} > ${typeof lastEpoch}`)
+                addressFunded.set(address, null) // Try to break cycles
+                break
+              }
               console.log(`   Funded at ${epoch}: ${addressToId.get(from)} ${from}`)
               address = from
+              lastEpoch = epoch
             }
             seenMiners.set(minerId, {
               epoch,
@@ -184,6 +192,9 @@ function writeCheckpoint (range) {
   console.log('Writing checkpoint', range)
   const file = `checkpoints/${range}.db`
   try {
+    if (fs.existsSync(`${file}.tmp`)) {
+      fs.unlinkSync(`${file}.tmp`)
+    }
     const db = new Database(`${file}.tmp`)
 
     db.exec(
@@ -249,9 +260,9 @@ async function loadCheckpoint (checkpointFile) {
   for (const row of addressesRows) {
     addressToId.set(row.address, row.id)
     idToAddress.set(row.id, row.address)
-    addressRegisteredEpoch.set(row.address, row.registered_epoch)
+    addressRegisteredEpoch.set(row.address, Number(row.registered_epoch))
     if (row.funded_from && row.funded_epoch) {
-      addressFunded.set(row.address, { from: row.funded_from, epoch: row.funded_epoch })
+      addressFunded.set(row.address, { from: row.funded_from, epoch: Number(row.funded_epoch) })
     }
   }
 
@@ -259,7 +270,7 @@ async function loadCheckpoint (checkpointFile) {
   const minersRows = minersStmt.all()
   for (const row of minersRows) {
     seenMiners.set(row.id, {
-      epoch: row.epoch,
+      epoch: Number(row.epoch),
       ownerId: row.owner_id
     })
   }

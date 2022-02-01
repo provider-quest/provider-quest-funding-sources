@@ -1,11 +1,15 @@
 import fs from 'fs'
 import { parse } from 'csv-parse'
+import { epochToDate } from './filecoin-epochs.mjs'
 
 const addressToId = new Map()
 const idToAddress = new Map()
 const addressFunded = new Map()
+const seenMiners = new Set()
 
-async function parseIdAddresses () {
+addressFunded.set('f1ojyfm5btrqq63zquewexr4hecynvq6yjyk5xv6q', null)
+
+async function parseIdAddresses (range) {
   const parser = parse()
   const epochs = []
 
@@ -28,9 +32,10 @@ async function parseIdAddresses () {
 
   parser.on('error', function (err) {
     console.error(err.message)
+    process.exit(1)
   })
 
-  const file = 'sync/id-addresses/0000000000__0000000239.csv'
+  const file = `sync/id-addresses/${range}.csv`
 
   const stream = fs.createReadStream(file)
   stream.pipe(parser)
@@ -39,7 +44,7 @@ async function parseIdAddresses () {
     parser.on('end', () => {
       for (const epoch in epochs) {
         for (const { id, address } of epochs[epoch]) {
-          console.log(`Address ${id} ${address} at ${epoch}`)
+          // console.log(`Address ${id} ${address} at ${epoch}`)
           addressToId.set(address, id)
           idToAddress.set(id, address)
         }
@@ -51,7 +56,7 @@ async function parseIdAddresses () {
   await promise
 }
 
-async function parseParsedMessages () {
+async function parseParsedMessages (range) {
   const parser = parse()
   const epochs = []
 
@@ -79,9 +84,10 @@ async function parseParsedMessages () {
 
   parser.on('error', function (err) {
     console.error(err.message)
+    process.exit(1)
   })
 
-  const file = 'sync/parsed-messages/0000000000__0000000239.csv'
+  const file = `sync/parsed-messages/${range}.csv`
 
   const stream = fs.createReadStream(file)
   stream.pipe(parser)
@@ -90,9 +96,9 @@ async function parseParsedMessages () {
     parser.on('end', () => {
       for (const epoch in epochs) {
         for (const { from, to } of epochs[epoch]) {
-          if (!addressFunded.get(to)) {
+          if (!addressFunded.has(to)) {
             addressFunded.set(to, { from, epoch })
-            console.log(`First fund ${from} => ${to} at ${epoch}`)
+            // console.log(`First fund ${from} => ${to} at ${epoch}`)
           }
         }
       }
@@ -103,7 +109,7 @@ async function parseParsedMessages () {
   await promise
 }
 
-async function parseMinerInfos () {
+async function parseMinerInfos (range) {
   const parser = parse()
   const epochs = []
 
@@ -134,10 +140,10 @@ async function parseMinerInfos () {
 
   parser.on('error', function (err) {
     console.error(err.message)
+    process.exit(1)
   })
 
-  // const file = 'sync/parsed-messages/0000000000__0000000239.csv'
-  const file = 'sync/miner-infos/0000000000__0000000239.csv'
+  const file = `sync/miner-infos/${range}.csv`
 
   const stream = fs.createReadStream(file)
   stream.pipe(parser)
@@ -145,15 +151,19 @@ async function parseMinerInfos () {
   const promise = new Promise(resolve => {
     parser.on('end', () => {
       for (const epoch in epochs) {
+        const date = epochToDate(epoch)
         for (const { minerId, ownerId } of epochs[epoch]) {
-          console.log(`Miner ${minerId} at ${epoch}`)
-          console.log(` Owner: ${ownerId} ${idToAddress.get(ownerId)}`)
-          let address = idToAddress.get(ownerId)
-          let funded
-          while(funded = addressFunded.get(address)) {
-            const { from, epoch } = funded
-            console.log(`   Funded at ${epoch}: ${addressToId.get(from)} ${from}`)
-            address = from
+          if (!seenMiners.has(minerId)) {
+            console.log(`Miner ${minerId} at ${epoch} - ${date}`)
+            console.log(` Owner: ${ownerId} ${idToAddress.get(ownerId)}`)
+            let address = idToAddress.get(ownerId)
+            let funded
+            while(funded = addressFunded.get(address)) {
+              const { from, epoch } = funded
+              console.log(`   Funded at ${epoch}: ${addressToId.get(from)} ${from}`)
+              address = from
+            }
+            seenMiners.add(minerId)
           }
         }
       }
@@ -165,9 +175,17 @@ async function parseMinerInfos () {
 }
 
 async function run () {
-  await parseIdAddresses()
-  await parseParsedMessages()
-  await parseMinerInfos()
+  const files = fs.readdirSync('sync/parsed-messages')
+  for (const file of files) {
+    const match = file.match(/(\d+)__(\d+)\.csv/)
+    if (match) {
+      const range = `${match[1]}__${match[2]}`
+      // console.log('Range: ', range)
+      await parseIdAddresses(range)
+      await parseParsedMessages(range)
+      await parseMinerInfos(range)
+    }
+  }
 }
 run()
 

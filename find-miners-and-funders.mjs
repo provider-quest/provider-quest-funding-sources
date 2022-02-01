@@ -241,19 +241,64 @@ function writeCheckpoint (range) {
   console.log('Wrote checkpoint', range)
 }
 
+async function loadCheckpoint (checkpointFile) {
+  const db = new Database(checkpointFile, { readonly: true })
+
+  const addressesStmt = db.prepare('SELECT * FROM addresses')
+  const addressesRows = addressesStmt.all()
+  for (const row of addressesRows) {
+    addressToId.set(row.address, row.id)
+    idToAddress.set(row.id, row.address)
+    addressRegisteredEpoch.set(row.address, row.registered_epoch)
+    if (row.funded_from && row.funded_epoch) {
+      addressFunded.set(row.address, { from: row.funded_from, epoch: row.funded_epoch })
+    }
+  }
+
+  const minersStmt = db.prepare('SELECT * FROM miners')
+  const minersRows = minersStmt.all()
+  for (const row of minersRows) {
+    seenMiners.set(row.id, {
+      epoch: row.epoch,
+      ownerId: row.owner_id
+    })
+  }
+
+  db.close()
+}
+
 async function run () {
   fs.mkdirSync('checkpoints', { recursive: true })
   const files = fs.readdirSync('sync/parsed-messages')
+  const availableRanges = []
   for (const file of files) {
     const match = file.match(/(\d+)__(\d+)\.csv/)
     if (match) {
       const range = `${match[1]}__${match[2]}`
-      // console.log('Range: ', range)
-      await parseIdAddresses(range)
-      await parseParsedMessages(range)
-      await parseMinerInfos(range)
-      await writeCheckpoint(range)
+      availableRanges.push(range)
     }
+  }
+  availableRanges.reverse()
+  let lastCheckpoint
+  const rangesToProcess = []
+  for (const range of availableRanges) {
+    const checkpointFile = `checkpoints/${range}.db`
+    if (fs.existsSync(checkpointFile)) {
+      lastCheckpoint = checkpointFile
+      break
+    }
+    rangesToProcess.unshift(range)
+  }
+  if (lastCheckpoint) {
+    await loadCheckpoint(lastCheckpoint)
+  }
+  console.log(lastCheckpoint, rangesToProcess)
+  for (const range of rangesToProcess) {
+    console.log('Range: ', range)
+    await parseIdAddresses(range)
+    await parseParsedMessages(range)
+    await parseMinerInfos(range)
+    await writeCheckpoint(range)
   }
 }
 run()

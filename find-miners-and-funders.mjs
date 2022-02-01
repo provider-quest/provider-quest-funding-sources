@@ -7,7 +7,7 @@ const addressToId = new Map()
 const idToAddress = new Map()
 const addressRegisteredEpoch = new Map()
 const addressFunded = new Map()
-const seenMiners = new Set()
+const seenMiners = new Map()
 
 addressFunded.set('f1ojyfm5btrqq63zquewexr4hecynvq6yjyk5xv6q', null)
 
@@ -166,7 +166,10 @@ async function parseMinerInfos (range) {
               console.log(`   Funded at ${epoch}: ${addressToId.get(from)} ${from}`)
               address = from
             }
-            seenMiners.add(minerId)
+            seenMiners.set(minerId, {
+              epoch,
+              ownerId
+            })
           }
         }
       }
@@ -178,14 +181,10 @@ async function parseMinerInfos (range) {
 }
 
 function writeCheckpoint (range) {
-  console.log('Write checkpoint', range)
+  console.log('Writing checkpoint', range)
+  const file = `checkpoints/${range}.db`
   try {
-    const db = new Database(`checkpoints/${range}.db`)
-
-    // const addressToId = new Map()
-    // const idToAddress = new Map()
-    // const addressFunded = new Map()
-    // const seenMiners = new Set()
+    const db = new Database(`${file}.tmp`)
 
     db.exec(
       `CREATE TABLE IF NOT EXISTS addresses(` +
@@ -195,33 +194,51 @@ function writeCheckpoint (range) {
       `funded_epoch INT, ` +
       `funded_from VARCHAR);`)
 
-    const insert = db.prepare(
+    const insertAddress = db.prepare(
       'INSERT INTO addresses ' +
       '(address, id, registered_epoch, funded_epoch, funded_from) ' +
       'VALUES (@address, @id, @registeredEpoch, @fundedEpoch, @fundedFrom)');
 
-    // db.transaction(() => {
-      for (const [ address, id ] of addressToId) {
-        let fundedEpoch
-        let fundedFrom
-        const registeredEpoch = addressRegisteredEpoch.get(address)
-        const fundedRecord = addressFunded.get(address)
-        if (fundedRecord) {
-          fundedFrom = fundedRecord.from
-          fundedEpoch = fundedRecord.epoch
-        }
-        console.log('Address', address, 'Id', id,
-                    'registered_epoch', registeredEpoch,
-                    'funded_epoch', fundedEpoch,
-                    'funded_from', fundedFrom)
-        insert.run({ address, id, registeredEpoch, fundedEpoch, fundedFrom })
+    for (const [ address, id ] of addressToId) {
+      let fundedEpoch
+      let fundedFrom
+      const registeredEpoch = addressRegisteredEpoch.get(address)
+      const fundedRecord = addressFunded.get(address)
+      if (fundedRecord) {
+        fundedFrom = fundedRecord.from
+        fundedEpoch = fundedRecord.epoch
       }
-    // })
+      /*
+      console.log('Address', address, 'Id', id,
+                  'registered_epoch', registeredEpoch,
+                  'funded_epoch', fundedEpoch,
+                  'funded_from', fundedFrom)
+      */
+      insertAddress.run({ address, id, registeredEpoch, fundedEpoch, fundedFrom })
+    }
+
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS miners(` +
+      `id VARCHAR, ` +
+      `owner_id VARCHAR, ` +
+      `epoch INT);`)
+
+    const insertMiner = db.prepare(
+      'INSERT INTO miners ' +
+      '(id, owner_id, epoch) ' +
+      'VALUES (@minerId, @ownerId, @epoch)');
+
+    for (const [ minerId, { ownerId, epoch } ] of seenMiners) {
+      // console.log('Miner', minerId, 'OwnerId', ownerId, 'Epoch', epoch)
+      insertMiner.run({ minerId, ownerId, epoch })
+    }
 
     db.close()
+    fs.renameSync(`${file}.tmp`, file)
   } catch (e) {
     console.error('writeCheckpoint Exception', e)
   }
+  console.log('Wrote checkpoint', range)
 }
 
 async function run () {

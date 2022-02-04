@@ -9,7 +9,7 @@ const addressRegisteredEpoch = new Map()
 const addressFunded = new Map()
 const seenMiners = new Map()
 
-addressFunded.set('f1ojyfm5btrqq63zquewexr4hecynvq6yjyk5xv6q', null)
+addressFunded.set('f1ojyfm5btrqq63zquewexr4hecynvq6yjyk5xv6q', null) // f0110 - genesis
 
 async function parseIdAddresses (range) {
   const parser = parse()
@@ -98,10 +98,30 @@ async function parseParsedMessages (range) {
   const promise = new Promise(resolve => {
     parser.on('end', () => {
       for (const epoch in epochs) {
-        for (const { from, to } of epochs[epoch]) {
+        for (let { from, to } of epochs[epoch]) {
+          if (from.match(/^f0/)) {
+            const lookup = idToAddress.get(from)
+            if (lookup) {
+              from = lookup
+            } else {
+              console.error(`  Warning: Failed lookup for ${from}`)
+            }
+          }
+          if (to.match(/^f0/)) {
+            const lookup = idToAddress.get(to)
+            if (lookup) {
+              to = lookup
+            } else {
+              console.error(`  Warning: Failed lookup for ${to}`)
+            }
+          }
           if (!addressFunded.has(to)) {
-            addressFunded.set(to, { from, epoch: Number(epoch) })
-            // console.log(`First fund ${from} => ${to} at ${epoch}`)
+            if (checkNoLoop(to, from)) {
+              addressFunded.set(to, { from, epoch: Number(epoch) })
+              // console.log(`First fund ${from} => ${to} at ${epoch}`)
+            } else {
+              console.error(`  Warning: Loop detected, skipping ${from} -> ${to}`)
+            }
           }
         }
       }
@@ -110,6 +130,22 @@ async function parseParsedMessages (range) {
   })
 
   await promise
+}
+
+function checkNoLoop (to, from) {
+  const seenSet = new Set()
+  seenSet.add(to)
+  let address = from
+  let funded
+  while (funded = addressFunded.get(address)) {
+    const { from, epoch } = funded
+    if (seenSet.has(from)) {
+      return false
+    }
+    seenSet.add(address)
+    address = from
+  }
+  return true
 }
 
 async function parseMinerInfos (range) {
@@ -157,20 +193,29 @@ async function parseMinerInfos (range) {
         const date = epochToDate(epoch)
         for (const { minerId, ownerId } of epochs[epoch]) {
           if (!seenMiners.has(minerId)) {
-            console.log(`Miner ${minerId} at ${epoch} - ${date}`)
-            console.log(` Owner: ${ownerId} ${idToAddress.get(ownerId)}`)
+            if (minerId === 'f034419') {
+              console.log(`Miner ${minerId} at ${epoch} - ${date}`)
+              console.log(` Owner: ${ownerId} ${idToAddress.get(ownerId)}`)
+            }
             let address = idToAddress.get(ownerId)
             let funded
             let lastEpoch = Number(epoch)
+            let displayed = new Set()
+            displayed.add(address)
             while(funded = addressFunded.get(address)) {
               const { from, epoch } = funded
+              if (minerId === 'f034419') {
+                console.log(`   @${epoch}: ${addressToId.get(from)} ${from} -> ${addressToId.get(address)} ${address}`)
+              }
               if (epoch > lastEpoch) {
-                console.error(`      Error: Funded at future ${epoch} > ${lastEpoch}: ${addressToId.get(from)} ${from}`)
-                console.error(`      Error: ${typeof epoch} > ${typeof lastEpoch}`)
-                addressFunded.set(address, null) // Try to break cycles
+                console.error(`      Warning: SP ${minerId}: Funded at future ${epoch} > ${lastEpoch}: ${addressToId.get(address)} ${address}`)
+                // addressFunded.set(address, null) // Try to break cycles
+                // break
+              }
+              if (displayed.has(from)) {
+                console.error(`      Error: loop detected - ${minerId}`)
                 break
               }
-              console.log(`   Funded at ${epoch}: ${addressToId.get(from)} ${from}`)
               address = from
               lastEpoch = epoch
             }

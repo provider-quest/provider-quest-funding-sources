@@ -1,9 +1,11 @@
 import fs from 'fs'
 import getStream from 'get-stream'
 import { S3Client, ListObjectsCommand, GetObjectCommand } from '@aws-sdk/client-s3'
+import 'dotenv/config'
 
 try {
-  const baseDir = './sync/id-addresses'
+  const workDir = process.env.WORK_DIR || '.'
+  const baseDir = `${workDir}/sync/id-addresses`
   await fs.mkdirSync(baseDir, { recursive: true })
   const s3Client = new S3Client({
     region: 'us-east-2'

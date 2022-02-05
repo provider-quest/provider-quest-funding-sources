@@ -13,6 +13,8 @@ const workDir = process.env.WORK_DIR || '.'
 
 addressFunded.set('f1ojyfm5btrqq63zquewexr4hecynvq6yjyk5xv6q', null) // f0110 - genesis
 
+fs.mkdirSync(`${workDir)/checkpoints`)
+
 async function parseIdAddresses (range) {
   const parser = parse()
   const epochs = []

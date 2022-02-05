@@ -2,12 +2,14 @@ import fs from 'fs'
 import { parse } from 'csv-parse'
 import { epochToDate } from './filecoin-epochs.mjs'
 import Database from 'better-sqlite3'
+import 'dotenv/config'
 
 const addressToId = new Map()
 const idToAddress = new Map()
 const addressRegisteredEpoch = new Map()
 const addressFunded = new Map()
 const seenMiners = new Map()
+const workDir = process.env.WORK_DIR || '.'
 
 addressFunded.set('f1ojyfm5btrqq63zquewexr4hecynvq6yjyk5xv6q', null) // f0110 - genesis
 
@@ -37,7 +39,7 @@ async function parseIdAddresses (range) {
     process.exit(1)
   })
 
-  const file = `sync/id-addresses/${range}.csv`
+  const file = `${workDir}/sync/id-addresses/${range}.csv`
 
   const stream = fs.createReadStream(file)
   stream.pipe(parser)
@@ -90,7 +92,7 @@ async function parseParsedMessages (range) {
     process.exit(1)
   })
 
-  const file = `sync/parsed-messages/${range}.csv`
+  const file = `${workDir}/sync/parsed-messages/${range}.csv`
 
   const stream = fs.createReadStream(file)
   stream.pipe(parser)
@@ -182,7 +184,7 @@ async function parseMinerInfos (range) {
     process.exit(1)
   })
 
-  const file = `sync/miner-infos/${range}.csv`
+  const file = `${workDir}/sync/miner-infos/${range}.csv`
 
   const stream = fs.createReadStream(file)
   stream.pipe(parser)
@@ -193,10 +195,8 @@ async function parseMinerInfos (range) {
         const date = epochToDate(epoch)
         for (const { minerId, ownerId } of epochs[epoch]) {
           if (!seenMiners.has(minerId)) {
-            if (minerId === 'f034419') {
-              console.log(`Miner ${minerId} at ${epoch} - ${date}`)
-              console.log(` Owner: ${ownerId} ${idToAddress.get(ownerId)}`)
-            }
+            // console.log(`Miner ${minerId} at ${epoch} - ${date}`)
+            // console.log(` Owner: ${ownerId} ${idToAddress.get(ownerId)}`)
             let address = idToAddress.get(ownerId)
             let funded
             let lastEpoch = Number(epoch)
@@ -204,9 +204,7 @@ async function parseMinerInfos (range) {
             displayed.add(address)
             while(funded = addressFunded.get(address)) {
               const { from, epoch } = funded
-              if (minerId === 'f034419') {
-                console.log(`   @${epoch}: ${addressToId.get(from)} ${from} -> ${addressToId.get(address)} ${address}`)
-              }
+              // console.log(`   @${epoch}: ${addressToId.get(from)} ${from} -> ${addressToId.get(address)} ${address}`)
               if (epoch > lastEpoch) {
                 console.error(`      Warning: SP ${minerId}: Funded at future ${epoch} > ${lastEpoch}: ${addressToId.get(address)} ${address}`)
                 // addressFunded.set(address, null) // Try to break cycles
@@ -235,7 +233,7 @@ async function parseMinerInfos (range) {
 
 function writeCheckpoint (range) {
   console.log('Writing checkpoint', range)
-  const file = `checkpoints/${range}.db`
+  const file = `${workDir}/checkpoints/${range}.db`
   try {
     if (fs.existsSync(`${file}.tmp`)) {
       fs.unlinkSync(`${file}.tmp`)
@@ -325,7 +323,7 @@ async function loadCheckpoint (checkpointFile) {
 
 async function run () {
   fs.mkdirSync('checkpoints', { recursive: true })
-  const files = fs.readdirSync('sync/parsed-messages')
+  const files = fs.readdirSync(`${workDir}/sync/parsed-messages`)
   const availableRanges = []
   for (const file of files) {
     const match = file.match(/(\d+)__(\d+)\.csv/)
@@ -338,7 +336,7 @@ async function run () {
   let lastCheckpoint
   const rangesToProcess = []
   for (const range of availableRanges) {
-    const checkpointFile = `checkpoints/${range}.db`
+    const checkpointFile = `${workDir}/checkpoints/${range}.db`
     if (fs.existsSync(checkpointFile)) {
       lastCheckpoint = checkpointFile
       break

@@ -1,8 +1,10 @@
 import fs from 'fs'
 import { parse } from 'csv-parse'
 import { epochToDate } from './filecoin-epochs.mjs'
+import lilyRanges from './lily-ranges.mjs'
 import Database from 'better-sqlite3'
 import 'dotenv/config'
+import minimist from 'minimist'
 
 const addressToId = new Map()
 const idToAddress = new Map()
@@ -10,10 +12,11 @@ const addressRegisteredEpoch = new Map()
 const addressFunded = new Map()
 const seenMiners = new Map()
 const workDir = process.env.WORK_DIR || '.'
+const argv = minimist(process.argv.slice(2), { boolean: true })
 
 addressFunded.set('f1ojyfm5btrqq63zquewexr4hecynvq6yjyk5xv6q', null) // f0110 - genesis
 
-fs.mkdirSync(`${workDir)/checkpoints`)
+fs.mkdirSync(`${workDir}/checkpoints`, { recursive: true })
 
 async function parseIdAddresses (range) {
   const parser = parse()
@@ -325,15 +328,23 @@ async function loadCheckpoint (checkpointFile) {
 
 async function run () {
   fs.mkdirSync('checkpoints', { recursive: true })
-  const files = fs.readdirSync(`${workDir}/sync/parsed-messages`)
   const availableRanges = []
-  for (const file of files) {
-    const match = file.match(/(\d+)__(\d+)\.csv/)
-    if (match) {
-      const range = `${match[1]}__${match[2]}`
-      availableRanges.push(range)
+  if (argv.local) {
+    const files = fs.readdirSync(`${workDir}/sync/parsed-messages`)
+    for (const file of files) {
+      const match = file.match(/(\d+)__(\d+)\.csv/)
+      if (match) {
+        const range = `${match[1]}__${match[2]}`
+        availableRanges.push(range)
+      }
+    }
+  } else {
+    const ranges = await lilyRanges()
+    for (const { from, to } of ranges) {
+      availableRanges.push(`${String(from).padStart(10, '0')}__${String(to).padStart(10, '0')}`)
     }
   }
+  console.log(availableRanges)
   availableRanges.reverse()
   let lastCheckpoint
   const rangesToProcess = []

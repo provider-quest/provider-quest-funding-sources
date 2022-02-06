@@ -239,6 +239,7 @@ async function parseMinerInfos (range) {
 
 function writeCheckpoint (range) {
   console.log('Writing checkpoint', range)
+  const start = Date.now()
   const file = `${workDir}/checkpoints/${range}.db`
   try {
     if (fs.existsSync(`${file}.tmp`)) {
@@ -259,6 +260,18 @@ function writeCheckpoint (range) {
       '(address, id, registered_epoch, funded_epoch, funded_from) ' +
       'VALUES (@address, @id, @registeredEpoch, @fundedEpoch, @fundedFrom)');
 
+    const addressBatch = []
+
+    const insertAddressTransaction = db.transaction(() => {
+      if (addressBatch.length > 0) {
+        for (const record of addressBatch) {
+          insertAddress.run(record)
+        }
+      }
+      addressBatch.length = 0
+    })
+
+    let counter = 0
     for (const [ address, id ] of addressToId) {
       let fundedEpoch
       let fundedFrom
@@ -274,8 +287,12 @@ function writeCheckpoint (range) {
                   'funded_epoch', fundedEpoch,
                   'funded_from', fundedFrom)
       */
-      insertAddress.run({ address, id, registeredEpoch, fundedEpoch, fundedFrom })
+      addressBatch.push({ address, id, registeredEpoch, fundedEpoch, fundedFrom })
+      if (counter++ % 1000 === 0) {
+        insertAddressTransaction()
+      }
     }
+    insertAddressTransaction()
 
     db.exec(
       `CREATE TABLE IF NOT EXISTS miners(` +
@@ -288,17 +305,32 @@ function writeCheckpoint (range) {
       '(id, owner_id, epoch) ' +
       'VALUES (@minerId, @ownerId, @epoch)');
 
+    const minerBatch = []
+
+    const insertMinerTransaction = db.transaction(() => {
+      if (minerBatch.length > 0) {
+        for (const record of minerBatch) {
+          insertMiner.run(record)
+        }
+      }
+      minerBatch.length = 0
+    })
+
     for (const [ minerId, { ownerId, epoch } ] of seenMiners) {
       // console.log('Miner', minerId, 'OwnerId', ownerId, 'Epoch', epoch)
-      insertMiner.run({ minerId, ownerId, epoch })
+      minerBatch.push({ minerId, ownerId, epoch })
+      if (counter++ % 1000 === 0) {
+        insertMinerTransaction()
+      }
     }
+    insertMinerTransaction()
 
     db.close()
     fs.renameSync(`${file}.tmp`, file)
   } catch (e) {
     console.error('writeCheckpoint Exception', e)
   }
-  console.log('Wrote checkpoint', range)
+  console.log('Wrote checkpoint', range, (Date.now() - start) / 1000)
 }
 
 async function loadCheckpoint (checkpointFile) {

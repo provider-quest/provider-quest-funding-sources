@@ -2,6 +2,7 @@ import fs from 'fs'
 import { parse } from 'csv-parse'
 import { epochToDate } from './filecoin-epochs.mjs'
 import lilyRanges from './lily-ranges.mjs'
+import syncLily from './sync-lily.mjs'
 import Database from 'better-sqlite3'
 import 'dotenv/config'
 import minimist from 'minimist'
@@ -362,11 +363,20 @@ async function run () {
   console.log(lastCheckpoint, rangesToProcess)
   for (const range of rangesToProcess) {
     console.log('Range: ', range)
+    await syncLily('id_addresses', range)
+    await syncLily('miner_infos', range)
+    await syncLily('parsed_messages', range)
+    console.log('Processing...')
     await parseIdAddresses(range)
     await parseParsedMessages(range)
     await parseMinerInfos(range)
     await writeCheckpoint(range)
   }
 }
-run()
+
+try {
+  run()
+} catch (e) {
+  console.error('Exception:', e)
+}
 

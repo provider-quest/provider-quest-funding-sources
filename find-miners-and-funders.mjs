@@ -403,6 +403,11 @@ async function run () {
     await parseParsedMessages(range)
     await parseMinerInfos(range)
     await writeCheckpoint(range)
+    if (argv.delete) {
+      fs.unlinkSync(`${workDir}/sync/id-addresses/${range}.csv`)
+      fs.unlinkSync(`${workDir}/sync/miner-infos/${range}.csv`)
+      fs.unlinkSync(`${workDir}/sync/parsed-messages/${range}.csv`)
+    }
   }
 }
 

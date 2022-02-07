@@ -18,6 +18,7 @@ const argv = minimist(process.argv.slice(2), { boolean: true })
 addressFunded.set('f1ojyfm5btrqq63zquewexr4hecynvq6yjyk5xv6q', null) // f0110 - genesis
 
 fs.mkdirSync(`${workDir}/checkpoints`, { recursive: true })
+fs.mkdirSync(`${workDir}/results`, { recursive: true })
 
 async function parseIdAddresses (range) {
   const parser = parse()
@@ -237,7 +238,7 @@ async function parseMinerInfos (range) {
   await promise
 }
 
-function writeCheckpoint (range) {
+function writeCheckpointAndResults (range) {
   console.log('Writing checkpoint', range)
   const start = Date.now()
   const file = `${workDir}/checkpoints/${range}.db`
@@ -325,6 +326,19 @@ function writeCheckpoint (range) {
     }
     insertMinerTransaction()
 
+    const queryStmt = db.prepare(
+      `
+        SELECT addresses.id, address, funded_from, miners.id AS miner_id
+        FROM addresses, miners
+        WHERE miners.owner_id = addresses.id
+        GROUP by addresses.id, address, funded_from, miner_id
+      `)
+    const queryRows = queryStmt.all()
+    fs.writeFileSync(
+      `${workDir}/results/miners-and-addresses-${range}.json`,
+      JSON.stringify(queryRows)
+    )
+
     db.close()
     fs.renameSync(`${file}.tmp`, file)
   } catch (e) {
@@ -402,7 +416,7 @@ async function run () {
     await parseIdAddresses(range)
     await parseParsedMessages(range)
     await parseMinerInfos(range)
-    await writeCheckpoint(range)
+    await writeCheckpointAndResults(range)
     if (argv.delete) {
       fs.unlinkSync(`${workDir}/sync/id-addresses/${range}.csv`)
       fs.unlinkSync(`${workDir}/sync/miner-infos/${range}.csv`)

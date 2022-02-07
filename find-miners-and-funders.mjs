@@ -339,6 +339,33 @@ function writeCheckpointAndResults (range) {
       JSON.stringify(queryRows)
     )
 
+    const query2Stmt = db.prepare(
+      `
+        WITH RECURSIVE
+          funded(id, address, funded_from, miner_id) AS (
+            SELECT
+               miner_address.id,
+               miner_address.address,
+               owner_address.address AS funded_from,
+               miners.id AS miner_id
+              FROM addresses AS miner_address, addresses AS owner_address, miners
+                WHERE miners.id = miner_address.id
+                  AND miners.owner_id = owner_address.id
+              GROUP by miner_address.id, miner_address.address, owner_address.address, miner_id
+            UNION
+            SELECT addresses.id, addresses.address, addresses.funded_from, NULL AS miner_id
+             FROM addresses
+             INNER JOIN funded
+               ON funded.funded_from = addresses.address
+          )
+        SELECT * FROM funded
+      `)
+    const query2Rows = query2Stmt.all()
+    fs.writeFileSync(
+      `${workDir}/results/miners-and-funders-${range}.json`,
+      JSON.stringify(query2Rows)
+    )
+
     db.close()
     fs.renameSync(`${file}.tmp`, file)
   } catch (e) {

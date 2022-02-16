@@ -13,8 +13,12 @@ export default async function lilyRanges () {
   for await (const data of paginateListObjectsV2({ client }, bucketParams)) {
     const pageRanges = data.CommonPrefixes.map(({ Prefix: prefix }) => {
       const match = prefix.match(/^data\/(\d+)_+(\d+)\/$/)
-      return { from: Number(match[1]), to: Number(match[2]) }
-    })
+      if (match) {
+        return { from: Number(match[1]), to: Number(match[2]) }
+      } else {
+        return null
+      }
+    }).filter(record => record)
     ranges = ranges.concat(pageRanges)
   }
   ranges.sort(({ from: a }, { from: b }) => a - b)

@@ -18,8 +18,12 @@ export default async function syncLily (tableName, targetRange) {
   const data = await s3Client.send(new ListObjectsCommand(bucketParams))
   const ranges = data.CommonPrefixes.map(({ Prefix: prefix }) => {
     const match = prefix.match(/^data\/(\d+)_+(\d+)\/$/)
-    return { from: Number(match[1]), to: Number(match[2]) }
-  }).sort(({ from: a }, { from: b }) => a - b)
+    if (match) {
+      return { from: Number(match[1]), to: Number(match[2]) }
+    } else {
+      return null
+    }
+  }).filter(record => record).sort(({ from: a }, { from: b }) => a - b)
 
   // aws s3 ls "s3://lily-data/data/1051440__1054319/power_actor_claims.csv"
   for (const range of ranges) {

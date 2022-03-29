@@ -61,5 +61,5 @@ export async function fetchDatesForYear (client, dirPrefix, table, year) {
     }
   }
   dates.sort((a, b) => a.getTime() - b.getTime())
-  return dates
+  return dates.map(date => date.toISOString().slice(0, 10))
 }

@@ -1,7 +1,7 @@
 import fs from 'fs'
 import { parse } from 'csv-parse'
 import { epochToDate } from './filecoin-epochs.mjs'
-import lilyRanges from './lily-ranges.mjs'
+import lilyDates from './lily-dates.mjs'
 import syncLily from './sync-lily.mjs'
 import Database from 'better-sqlite3'
 import 'dotenv/config'
@@ -20,7 +20,7 @@ addressFunded.set('f1ojyfm5btrqq63zquewexr4hecynvq6yjyk5xv6q', null) // f0110 - 
 fs.mkdirSync(`${workDir}/checkpoints`, { recursive: true })
 fs.mkdirSync(`${workDir}/results`, { recursive: true })
 
-async function parseIdAddresses (range) {
+async function parseIdAddresses (date) {
   const parser = parse()
   const epochs = []
 
@@ -46,7 +46,7 @@ async function parseIdAddresses (range) {
     process.exit(1)
   })
 
-  const file = `${workDir}/sync/id-addresses/${range}.csv`
+  const file = `${workDir}/sync/id-addresses/${date}.csv`
 
   const stream = fs.createReadStream(file)
   stream.pipe(parser)
@@ -68,7 +68,7 @@ async function parseIdAddresses (range) {
   await promise
 }
 
-async function parseParsedMessages (range) {
+async function parseParsedMessages (date) {
   const parser = parse()
   const epochs = []
 
@@ -99,7 +99,7 @@ async function parseParsedMessages (range) {
     process.exit(1)
   })
 
-  const file = `${workDir}/sync/parsed-messages/${range}.csv`
+  const file = `${workDir}/sync/parsed-messages/${date}.csv`
 
   const stream = fs.createReadStream(file)
   stream.pipe(parser)
@@ -157,7 +157,7 @@ function checkNoLoop (to, from) {
   return true
 }
 
-async function parseMinerInfos (range) {
+async function parseMinerInfos (date) {
   const parser = parse()
   const epochs = []
 
@@ -191,7 +191,7 @@ async function parseMinerInfos (range) {
     process.exit(1)
   })
 
-  const file = `${workDir}/sync/miner-infos/${range}.csv`
+  const file = `${workDir}/sync/miner-infos/${date}.csv`
 
   const stream = fs.createReadStream(file)
   stream.pipe(parser)
@@ -238,10 +238,10 @@ async function parseMinerInfos (range) {
   await promise
 }
 
-function writeCheckpointAndResults (range) {
-  console.log('Writing checkpoint', range)
+function writeCheckpointAndResults (date) {
+  console.log('Writing checkpoint', date)
   const start = Date.now()
-  const file = `${workDir}/checkpoints/${range}.db`
+  const file = `${workDir}/checkpoints/${date}.db`
   try {
     if (fs.existsSync(`${file}.tmp`)) {
       fs.unlinkSync(`${file}.tmp`)
@@ -335,7 +335,7 @@ function writeCheckpointAndResults (range) {
       `)
     const queryRows = queryStmt.all()
     fs.writeFileSync(
-      `${workDir}/results/miners-and-addresses-${range}.json`,
+      `${workDir}/results/miners-and-addresses-${date}.json`,
       JSON.stringify(queryRows)
     )
 
@@ -362,7 +362,7 @@ function writeCheckpointAndResults (range) {
       `)
     const query2Rows = query2Stmt.all()
     fs.writeFileSync(
-      `${workDir}/results/miners-and-funders-${range}.json`,
+      `${workDir}/results/miners-and-funders-${date}.json`,
       JSON.stringify(query2Rows)
     )
 
@@ -371,7 +371,7 @@ function writeCheckpointAndResults (range) {
   } catch (e) {
     console.error('writeCheckpoint Exception', e)
   }
-  console.log('Wrote checkpoint', range, (Date.now() - start) / 1000)
+  console.log('Wrote checkpoint', date, (Date.now() - start) / 1000)
 }
 
 async function loadCheckpoint (checkpointFile) {
@@ -402,52 +402,51 @@ async function loadCheckpoint (checkpointFile) {
 
 async function run () {
   fs.mkdirSync('checkpoints', { recursive: true })
-  const availableRanges = []
+  const availableDates = []
   if (argv.local) {
     const files = fs.readdirSync(`${workDir}/sync/parsed-messages`)
     for (const file of files) {
-      const match = file.match(/(\d+)__(\d+)\.csv/)
+      const match = file.match(/(\d+-\d+-\d+)\.csv/)
       if (match) {
-        const range = `${match[1]}__${match[2]}`
-        availableRanges.push(range)
+        const date = match[1]
+        availableDates.push(date)
       }
     }
   } else {
-    const ranges = await lilyRanges()
-    for (const { from, to } of ranges) {
-      availableRanges.push(`${String(from).padStart(10, '0')}__${String(to).padStart(10, '0')}`)
+    const dates = await lilyDates('messages')
+    for (const date of dates) {
+      availableDates.push(date)
     }
   }
-  console.log(availableRanges)
-  availableRanges.reverse()
+  console.log(availableDates)
+  availableDates.reverse()
   let lastCheckpoint
-  const rangesToProcess = []
-  for (const range of availableRanges) {
-    const checkpointFile = `${workDir}/checkpoints/${range}.db`
+  const datesToProcess = []
+  for (const date of availableDates) {
+    const checkpointFile = `${workDir}/checkpoints/${date}.db`
     if (fs.existsSync(checkpointFile)) {
       lastCheckpoint = checkpointFile
       break
     }
-    rangesToProcess.unshift(range)
+    datesToProcess.unshift(date)
   }
   if (lastCheckpoint) {
     await loadCheckpoint(lastCheckpoint)
   }
-  console.log(lastCheckpoint, rangesToProcess)
-  for (const range of rangesToProcess) {
-    console.log('Range: ', range)
-    await syncLily('id_addresses', range)
-    await syncLily('miner_infos', range)
-    await syncLily('parsed_messages', range)
-    console.log('Processing...')
-    await parseIdAddresses(range)
-    await parseParsedMessages(range)
-    await parseMinerInfos(range)
-    await writeCheckpointAndResults(range)
+  console.log(lastCheckpoint, datesToProcess)
+  for (const date of datesToProcess) {
+    console.log('Date: ', date)
+    await syncLily('id_addresses', date)
+    await syncLily('miner_infos', date)
+    await syncLily('parsed_messages', date)
+    await parseIdAddresses(date)
+    await parseParsedMessages(date)
+    await parseMinerInfos(date)
+    await writeCheckpointAndResults(date)
     if (argv.delete) {
-      fs.unlinkSync(`${workDir}/sync/id-addresses/${range}.csv`)
-      fs.unlinkSync(`${workDir}/sync/miner-infos/${range}.csv`)
-      fs.unlinkSync(`${workDir}/sync/parsed-messages/${range}.csv`)
+      fs.unlinkSync(`${workDir}/sync/id-addresses/${date}.csv`)
+      fs.unlinkSync(`${workDir}/sync/miner-infos/${date}.csv`)
+      fs.unlinkSync(`${workDir}/sync/parsed-messages/${date}.csv`)
     }
   }
 }

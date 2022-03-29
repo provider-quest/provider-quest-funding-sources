@@ -442,7 +442,9 @@ async function run () {
     await parseIdAddresses(date)
     await parseParsedMessages(date)
     await parseMinerInfos(date)
-    await writeCheckpointAndResults(date)
+    if (!argv.monthly || date.slice(8) === '01') {
+      await writeCheckpointAndResults(date)
+    }
     if (argv.delete) {
       fs.unlinkSync(`${workDir}/sync/id-addresses/${date}.csv`)
       fs.unlinkSync(`${workDir}/sync/miner-infos/${date}.csv`)

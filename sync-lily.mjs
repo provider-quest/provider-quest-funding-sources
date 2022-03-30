@@ -30,11 +30,10 @@ export default async function syncLily (tableName, date) {
       Bucket: bucketParams.Bucket,
       Key: key
     }))
-    const writeStream = fs.createWriteStream(targetFileTmp)
     await pipeline(
       data.Body,
       zlib.createGunzip(),
-      fs.createWriteStream(targetFileTmp),
+      fs.createWriteStream(targetFileTmp)
     )
     fs.renameSync(targetFileTmp, targetFile)
   }

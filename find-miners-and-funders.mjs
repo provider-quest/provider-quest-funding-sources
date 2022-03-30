@@ -442,7 +442,7 @@ async function run () {
     await parseIdAddresses(date)
     await parseParsedMessages(date)
     await parseMinerInfos(date)
-    if (!argv.monthly || date.slice(8) === '01') {
+    if (!argv.monthly || date.slice(8) === '01' || date.slice(8) == '11' || date.slice(8) == '21') {
       await writeCheckpointAndResults(date)
     }
     if (argv.delete) {

@@ -413,12 +413,12 @@ async function run () {
       }
     }
   } else {
-    const dates = await lilyDates('messages')
+    const dates = await lilyDates('miner_infos')
     for (const date of dates) {
       availableDates.push(date)
     }
   }
-  console.log(availableDates)
+  console.log(`${availableDates.length} available dates, last: ${availableDates.slice(-1)[0]}`)
   availableDates.reverse()
   let lastCheckpoint
   const datesToProcess = []
@@ -433,7 +433,8 @@ async function run () {
   if (lastCheckpoint) {
     await loadCheckpoint(lastCheckpoint)
   }
-  console.log(lastCheckpoint, datesToProcess)
+  console.log('Last checkpoint:', lastCheckpoint)
+  console.log(`${datesToProcess.length} dates to process, ${datesToProcess[0]} to ${datesToProcess.slice(-1)[0]}`)
   for (const date of datesToProcess) {
     console.log('Date: ', date)
     await syncLily('id_addresses', date)

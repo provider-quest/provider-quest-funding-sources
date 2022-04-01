@@ -434,12 +434,17 @@ async function run () {
     await loadCheckpoint(lastCheckpoint)
   }
   console.log('Last checkpoint:', lastCheckpoint)
-  console.log(`${datesToProcess.length} dates to process, ${datesToProcess[0]} to ${datesToProcess.slice(-1)[0]}`)
+  if (datesToProcess.length === 0) {
+    console.log('No dates to process, all caught up.')
+  } else {
+    console.log(`${datesToProcess.length} dates to process, ${datesToProcess[0]} to ${datesToProcess.slice(-1)[0]}`)
+  }
   for (const date of datesToProcess) {
     console.log('Date: ', date)
     await syncLily('id_addresses', date)
     await syncLily('miner_infos', date)
     await syncLily('parsed_messages', date)
+    console.log('Processing...')
     await parseIdAddresses(date)
     await parseParsedMessages(date)
     await parseMinerInfos(date)
@@ -452,6 +457,7 @@ async function run () {
       fs.unlinkSync(`${workDir}/sync/parsed-messages/${date}.csv`)
     }
   }
+  console.log('Done.')
 }
 
 try {

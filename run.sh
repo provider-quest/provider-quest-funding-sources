@@ -2,4 +2,4 @@
 
 set -e
 
-TZ=UTC node find-miners-and-funders.mjs --delete $1
+TZ=UTC node find-miners-and-funders.mjs --delete --limit $1

@@ -439,7 +439,13 @@ async function run () {
   } else {
     console.log(`${datesToProcess.length} dates to process, ${datesToProcess[0]} to ${datesToProcess.slice(-1)[0]}`)
   }
+  let count = 0
   for (const date of datesToProcess) {
+    if (count++ === 3) {
+      console.log('Max number of dates processed.')
+      break
+    }
+
     console.log('Date: ', date)
     await syncLily('id_addresses', date)
     await syncLily('miner_infos', date)

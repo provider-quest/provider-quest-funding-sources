@@ -441,7 +441,7 @@ async function run () {
   }
   let count = 0
   for (const date of datesToProcess) {
-    if (count++ === 3) {
+    if (argv.limit && count++ === 3) {
       console.log('Max number of dates processed.')
       break
     }
